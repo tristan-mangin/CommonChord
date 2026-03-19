@@ -4,3 +4,13 @@
 
 // hashFile(path) -> string
 // hashBytes(buffer, size) -> string
+
+#ifndef HASHER_H
+#define HASHER_H
+
+#include <string>
+
+std::string hashFile(const std::string& filePath);
+std::string hashBytes(const unsigned char* buffer, size_t size);
+
+#endif // HASHER_H
