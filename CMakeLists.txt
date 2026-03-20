@@ -6,11 +6,11 @@ set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_EXTENSIONS OFF)
 
-# ─── find dependencies ───────────────────────────────────────────────────────
+# find dependencies 
 
 find_package(OpenSSL REQUIRED)
 
-# ─── source files shared between the main executable and tests ───────────────
+# source files shared between the main executable and tests 
 
 # List every .cpp in src/ except main.cpp so tests can link against the same
 # compiled objects without pulling in a second main() entry point
@@ -23,7 +23,7 @@ set(BVCS_SOURCES
     storageHandling/utils.cpp
 )
 
-# ─── main executable ─────────────────────────────────────────────────────────
+# main executable 
 
 add_executable(bvcs
     storageHandling/main.cpp
@@ -36,7 +36,7 @@ target_link_libraries(bvcs PRIVATE
     OpenSSL::Crypto
 )
 
-# ─── tests ───────────────────────────────────────────────────────────────────
+# tests
 
 enable_testing()
 

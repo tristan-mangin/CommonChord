@@ -5,7 +5,7 @@ C++ Notes
                         - able to handle differences in operating systems
 
 TODO LIST:
-    - hasher.cpp/h
+    - hasher.cpp/h *
     - utils.cpp/h
     - object_store.cpp/h
     - commit.cpp/h
