@@ -7,5 +7,15 @@ Personal project testing the concept of an open-source version control platform 
 | Tool | Use |
 |------|------------|
 | C++ | General file management (storage, hashing, etc.) |
-| Python | File comparison and visualization |
+| Python | File comparison, visualization, machine learning |
 | Django | Backend |
+| React/Native | Frontend web and mobile |
+| PostgreSQL | Database | 
+
+
+# Features to be Implemented
+
+- Profiles to store/access musical repositories from different access points
+- Quick access to stored versions of music production files for remote collaboration
+- Visual comparison between different versions of .WAV files, eventually extended to DAW project files: .als (ableton), .logicx (logic), .ptx (pro tools) 
+- Machine learning to determine genre/vibe of created music
