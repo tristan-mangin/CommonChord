@@ -53,6 +53,7 @@ function(add_bvcs_test test_name)
 endfunction()
 
 add_bvcs_test(test_hasher)
+add_bvcs_test(test_utils)
 # Add future test files here, e.g.:
 # add_bvcs_test(test_object_store)
 # add_bvcs_test(test_commit)

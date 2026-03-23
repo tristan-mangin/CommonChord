@@ -48,7 +48,8 @@ void writeFileAtomic(const std::filesystem::path &filePath, const std::vector<un
     tempFile.write(reinterpret_cast<const char *>(data.data()), data.size());
     if (!tempFile)
     {
-        throw std::runtime_error("Could not open temporary file for writing: " + tempFilePath.string());
+        std::filesystem::remove(tempFilePath);
+        throw std::runtime_error("Failed to write data to: " + tempFilePath.string());
     }
     tempFile.close();
 
@@ -90,7 +91,7 @@ std::vector<unsigned char> hexToBytes(const std::string &hex)
     bytes.reserve(hex.length() / 2);
     for (size_t i = 0; i < hex.length(); i += 2)
     {
-        if (!std::isxdigit(hex[i] || !std::isxdigit(hex[i + 1])))
+        if (!std::isxdigit(hex[i]) || !std::isxdigit(hex[i + 1]))
         {
             throw std::runtime_error("Invalid hex string: contains non-hex characters");
         }
