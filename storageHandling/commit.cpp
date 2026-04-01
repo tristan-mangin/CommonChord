@@ -41,15 +41,15 @@ Commit deserializeCommit(const std::vector<unsigned char> &data)
     std::string parentHash, blobHash, message;
     time_t timestamp;
 
-    std::getline(iss, parentHash);
-    std::getline(iss, blobHash);
-    iss >> timestamp;
-    // iss.ignore(); // Ignore the null terminator
-    if (!(iss) >> timestamp) {
+    std::getline(iss, parentHash, '\0');
+    std::getline(iss, blobHash, '\0');
+
+    if (!(iss >> timestamp)) {
         throw std::runtime_error("Failed to parse timestamp from commit data.");
     }
+    iss.ignore(); // Ignore the null terminator after the timestamp
 
-    std::getline(iss, message);
+    std::getline(iss, message, '\0');
 
     return Commit{std::string(), parentHash, blobHash, message, timestamp};
 }
