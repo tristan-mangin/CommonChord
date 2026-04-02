@@ -7,3 +7,22 @@
 //          init(), add(filePath), commit(message), log(), checkout(hashOrBranch, outputPath)
 //      private:
 //          resolveRef(name) -> hash, headHash() -> string, writeHead(hash), findRepoRoot() -> path
+
+#include "repository.h"
+#include <iostream>
+
+Repository::Repository(const std::filesystem::path &startPath)
+{
+    repoRoot = findRepoRoot(startPath);
+}
+
+void Repository::init()
+{
+    // Implementation for initializing a new repository
+}
+
+void Repository::add(const std::filesystem::path &filePath)
+{
+    // Implementation for adding a file to the staging area
+}
+
