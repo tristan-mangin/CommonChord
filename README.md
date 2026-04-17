@@ -4,13 +4,13 @@ Personal project testing the concept of an open-source version control platform 
 
 # Stack (current plan)
 
-| Tool | Use |
-|------|------------|
-| C++ | General file management (storage, hashing, etc.) |
-| Python | File comparison, visualization, machine learning |
-| Django | Backend |
-| React/Native | Frontend web and mobile |
-| PostgreSQL | Database | 
+| Tool         | Use                                              |
+|--------------|--------------------------------------------------|
+| C++          | General file management (storage, hashing, etc.) |
+| Python       | File comparison, visualization, machine learning |
+| Django       | Backend                                          |
+| React/Native | Frontend web and mobile                          |
+| PostgreSQL   | Database                                         | 
 
 
 # Features to be Implemented

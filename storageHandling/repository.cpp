@@ -100,15 +100,6 @@ void Repository::commit(const std::string &message)
     writeHead(c.hash);
     clear(m_root);
 
-    // // Write the serialized commit directly into the object store
-    // std::filesystem::path commitPath = objectPath(m_root, c.hash);
-    // std::filesystem::create_directories(commitPath.parent_path());
-    // writeFileAtomic(commitPath, serialized);
-
-    // // Advance HEAD and clear the staging area
-    // writeHead(c.hash);
-    // clear(m_root);
-
     std::cout << "Committed " << c.hash.substr(0, 8) << "... \""
               << message << "\"\n";
 }

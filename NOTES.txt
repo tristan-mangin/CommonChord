@@ -10,4 +10,4 @@ TODO LIST:
     - object_store.cpp/h        *
     - commit.cpp/h              *
     - index.cpp/h               *
-    - repository.cpp/h
+    - repository.cpp/h          *

@@ -42,8 +42,15 @@ std::string storeFromFile(const std::filesystem::path &repoRoot, const std::file
     return hash;
 }
 
-std::string storeFromMemory(const std::filesystem::path &repoRoot,
-                            const std::vector<unsigned char> &data)
+/**
+ * Stores the given data in the object store and returns its hash. If an object with the same hash already
+ * exists, it does not store it again.
+ * @param repoRoot The root path of the repository, used to determine where the object store is located.
+ * @param data The data to store as a vector of bytes.
+ * @return The hash of the data as a hex string.
+ * @throws std::runtime_error if the data cannot be written to the object store.
+ */
+std::string storeFromMemory(const std::filesystem::path &repoRoot, const std::vector<unsigned char> &data)
 {
     std::string hash = hashBytes(data.data(), data.size());
     std::filesystem::path destPath = objectPath(repoRoot, hash);
