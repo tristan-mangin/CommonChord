@@ -12,6 +12,10 @@ Personal project testing the concept of an open-source version control platform 
 | React/Native | Frontend web and mobile                          |
 | PostgreSQL   | Database                                         | 
 
+# Latest Updates
+### Binary File (Git Like) Storage Handling - 4/17/2026
+- Find, create, and add hashed binary objects to repositories
+- Implemented and tested in C++ 
 
 # Features to be Implemented
 
