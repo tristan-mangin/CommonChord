@@ -1,5 +1,10 @@
 # Cmake build output
 build/
+build-coverage/
+coverage/
+*.gcda
+*.gcno
+*.gcov
 
 # Compiled binaries
 *.o
