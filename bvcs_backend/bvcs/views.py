@@ -1,5 +1,5 @@
 from pathlib import Path
-from django.utils.dataparse import parse_datetime
+from django.utils.dateparse import parse_datetime
 from django.utils import timezone
 from datetime import datetime, timezone as dt_timezone
 from rest_framework import status
@@ -32,7 +32,7 @@ class RepositoryListView(APIView):
 
         if repo_path.exists():
             return Response(
-                {'error': f'A repository named '{name}' already exists.'},
+                {'error': f'A repository named \'{name}\' already exists.'},
                 status=status.HTTP_400_BAD_REQUEST,
             )
         
