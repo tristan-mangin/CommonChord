@@ -8,4 +8,5 @@ urlpatterns = [
     path("repos/<int:repo_id>/add/", views.StageFileView.as_view(), name="stage-file"),
     path("repos/<int:repo_id>/checkout/<str:commit_hash>/", views.CheckoutView.as_view(), name="checkout"),
     path("repos/<int:repo_id>/status/", views.StatusView.as_view(), name="status"),
+    path("repos/<int:repo_id>/commits/<str:commit_hash>/als/", views.ALSInfoView.as_view(), name="als-parser"),
 ]

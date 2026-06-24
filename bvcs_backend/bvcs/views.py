@@ -10,6 +10,7 @@ from rest_framework.parsers import MultiPartParser
 from .models import Repository, Commit
 from .serializers import RepositorySerializer, RepositoryCreateSerializer, CommitSerializer
 from .client import BVCSClient, BVCSError
+from .als_parser import parse_als, ALSInfo
 
 import os 
 import mimetypes
@@ -213,38 +214,6 @@ class StageFileView(APIView):
 def is_valid_sha256(hash_string: str) -> bool:
     return bool(re.fullmatch(r'[a-fA-F0-9]{64}', hash_string))
 
-# class CheckoutView(APIView):
-#     """
-#     GET /api/repos/{id}/checkout/{hash}/  — retrieve a specific version of a file
-#     """
-
-#     def get_repo(self, repo_id):
-#         try:
-#             return Repository.objects.get(pk=repo_id)
-#         except Repository.DoesNotExist:
-#             return None
-
-#     def get(self, request, repo_id, commit_hash):
-#         repo = self.get_repo(repo_id)
-#         if repo is None:
-#             return Response({"error": "Repository not found."}, status=status.HTTP_404_NOT_FOUND)
-
-#         if not is_valid_sha256(commit_hash):
-#             return Response(
-#                 {"error": "Invalid commit hash. Expected a 64-character hex string."},
-#                 status=status.HTTP_400_BAD_REQUEST,
-#             )
-
-#         repo_path = Path(repo.path)
-#         output_path = repo_path / f"checkout_{commit_hash[:8]}"
-
-#         try:
-#             client = BVCSClient(repo_path)
-#             client.checkout(commit_hash, str(output_path))
-#         except BVCSError as e:
-#             return Response({"error": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
-
-#         return Response({"output_path": str(output_path)}, status=status.HTTP_200_OK)
 class CheckoutView(APIView):
     """
     GET /api/repos/{id}/checkout/{hash}/  — stream a specific version of a file
@@ -330,3 +299,69 @@ class StatusView(APIView):
             return Response({"error": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
         return Response(status_data)
+
+class ParseALSView(APIView):
+    """
+    GET /api/repos/{id}/commits/{hash}/parse_als/
+    Checks out the blob for the commit, parses it as an Ableton .als file,
+    and returns structured JSON
+    """
+
+    def get_repo(self, repo_id):
+        try:
+            return Repository.objects.get(pk=repo_id)
+        except Repository.DoesNotExist:
+            return None
+
+    def get(self, request, repo_id, commit_hash):
+        repo = self.get_repo(repo_id)
+        if repo is None:
+            return Response({"error": "Repository not found."}, status=status.HTTP_404_NOT_FOUND)
+
+        if not is_valid_sha256(commit_hash):
+            return Response(
+                {"error": "Invalid commit hash. Expected a 64-character hex string."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        repo_path = Path(repo.path)
+        temp_path = repo_path / f"als_tmp_{commit_hash[:8]}"
+
+        try:
+            client = BVCSClient(repo_path)
+            client.checkout(commit_hash, str(temp_path))
+
+            with open(temp_path, "rb") as f:
+                file_bytes = f.read()
+            
+            als_info = parse_als(file_bytes)
+        except BVCSError as e:
+            return Response({"error": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+        except ValueError as e:
+            return Response({"error": str(e)}, status=status.HTTP_400_BAD_REQUEST)
+        except OSError as e:
+            return Response({"error": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+        finally:
+            if temp_path.exists():
+                temp_path.unlink()
+        
+        return Response({
+            "tempo": als_info.tempo,
+            "time_signature_numerator": als_info.time_signature_numerator,
+            "time_signature_denominator": als_info.time_signature_denominator,
+            "tracks": [
+                {
+                    "name": track.name,
+                    "track_type": track.track_type,
+                    "clips": [
+                        {
+                            "name": clip.name,
+                            "start_time": clip.start_time,
+                            "end_time": clip.end_time,
+                        }
+                        for clip in track.clips
+                    ],
+                }
+                for track in als_info.tracks
+            ],
+        })
