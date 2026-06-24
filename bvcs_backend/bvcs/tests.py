@@ -435,3 +435,65 @@ class TestRepositoryNameValidation(APITestCase):
     def test_name_too_long_rejected(self):
         response = self.client.post('/api/repos/', {'name': 'a' * 256}, format='json')
         self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+
+class TestParseALSView(APITestCase):
+    def setUp(self):
+        self.repo = Repository.objects.create(name='als-repo', path='/some/path')
+        self.valid_hash = 'a' * 64
+
+    @patch('bvcs.views.BVCSClient')
+    @patch('bvcs.views.mimetypes.guess_type', return_value=('application/octet-stream', None))
+    def test_als_info_success(self, mock_guess, MockClient):
+        import gzip
+        import xml.etree.ElementTree as ET
+
+         # Build a minimal valid .als XML and gzip it
+        root = ET.Element('Ableton')
+        live_set = ET.SubElement(root, 'LiveSet')
+        master = ET.SubElement(live_set, 'MasterTrack')
+        tempo_el = ET.SubElement(master, 'Tempo')
+        ET.SubElement(tempo_el, 'Manual', {'Value': '120.0'})
+        xml_bytes = ET.tostring(root)
+        als_bytes = gzip.compress(xml_bytes)
+
+        mock_instance = MockClient.return_value
+        mock_instance.checkout.return_value = None
+
+        with patch('builtins.open', unittest.mock.mock_open(read_data=als_bytes)), \
+             patch('bvcs.views.Path.exists', return_value=True), \
+             patch('bvcs.views.Path.unlink'):
+            response = self.client.get(
+                f'/api/repos/{self.repo.id}/commits/{self.valid_hash}/als/'
+            )
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertIn('tempo', response.data)
+        self.assertIn('tracks', response.data)
+
+        @patch('bvcs.views.BVCSClient')
+        def test_als_parser_invalid_file(self, MockClient):
+            mock_instance = MockClient.return_value
+            mock_instance.checkout.return_value = None
+
+            with patch('builtins.open', unittest.mock.mock_open(read_data=b'not a gzip file')), \
+                patch('bvcs.views.Path.exists', return_value=True), \
+                patch('bvcs.views.Path.unlink'), \
+                patch('bvcs.views.mimetypes.guess_type', return_value=('application/octet-stream', None)):
+                response = self.client.get(
+                    f'/api/repos/{self.repo.id}/commits/{self.valid_hash}/als/'
+                )
+
+            self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+            self.assertIn('error', response.data)
+
+        def test_als_parser_invalid_hash(self):
+            response = self.client.get(
+                f'/api/repos/{self.repo.id}/commits/badhash/als/'
+            )
+            self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+
+        def test_als_parser_nonexistent_repo(self):
+            response = self.client.get(
+                f'/api/repos/99999/commits/{self.valid_hash}/als/'
+            )
+            self.assertEqual(response.status_code, status.HTTP_404_NOT_FOUND)
