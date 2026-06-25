@@ -2,7 +2,7 @@
     
 Personal project testing the concept of an open-source version control platform for music production. The basic framework is similar to git, with commits, branches, etc. eventually to be implemented to support large music files.
 
-# Stack (current plan)
+# Stack 
 
 | Tool         | Use                                              |
 |--------------|--------------------------------------------------|
@@ -15,8 +15,8 @@ Personal project testing the concept of an open-source version control platform 
 # Latest Updates
 
 ### Ableton File Parsing and Waveform Decomposition - 6/25/2026
-- GET /api/repos/{id}/commits/{hash}/parse_als/
-- GET /api/repos/{id}/commits/{hash}/waveform/
+- GET /api/repos/{id}/commits/{hash}/parse_als/ - parse ableton .als files into JSON
+- GET /api/repos/{id}/commits/{hash}/waveform/ - downsampled amplitude data
 
 ### End-to-end Workflow - 5/5/2026
 - POST /api/repos/ — created a repo on disk and in the DB
