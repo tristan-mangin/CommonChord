@@ -9,4 +9,5 @@ urlpatterns = [
     path("repos/<int:repo_id>/checkout/<str:commit_hash>/", views.CheckoutView.as_view(), name="checkout"),
     path("repos/<int:repo_id>/status/", views.StatusView.as_view(), name="status"),
     path("repos/<int:repo_id>/commits/<str:commit_hash>/als/", views.ParseALSView.as_view(), name="als-parser"),
+    path("repos/<int:repo_id>/commits/<str:commit_hash>/waveform/", views.WaveformView.as_view(), name="waveform"),
 ]
