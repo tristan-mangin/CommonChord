@@ -10,6 +10,7 @@ from rest_framework.parsers import MultiPartParser
 from .models import Repository, Commit
 from .serializers import RepositorySerializer, RepositoryCreateSerializer, CommitSerializer
 from .client import BVCSClient, BVCSError
+from .waveform import extract_waveform
 
 import re
 
@@ -253,3 +254,62 @@ class StatusView(APIView):
             return Response({"error": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
         return Response(status_data)
+
+class WaveformView(APIView):
+    """
+    GET /api/repos/{id}/commits/{hash}/waveform/
+    Checks out the WAV blob for a commit and returns downsampled
+    amplitude data for frontend waveform rendering.
+    """
+
+    def get_repo(self, repo_id):
+        try:
+            return Repository.objects.get(pk=repo_id)
+        except Repository.DoesNotExist:
+            return None
+
+    def get(self, request, repo_id, commit_hash):
+        repo = self.get_repo(repo_id)
+        if repo is None:
+            return Response({"error": "Repository not found."}, status=status.HTTP_404_NOT_FOUND)
+
+        if not is_valid_sha256(commit_hash):
+            return Response(
+                {"error": "Invalid commit hash. Expected a 64-character hex string."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        num_samples = request.query_params.get("samples", 1000)
+        try:
+            num_samples = int(num_samples)
+            if num_samples < 100 or num_samples > 10000:
+                raise ValueError
+        except ValueError:
+            return Response(
+                {"error": "samples must be an integer between 100 and 10000."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        repo_path = Path(repo.path)
+        temp_path = repo_path / f".waveform_tmp_{commit_hash[:8]}"
+
+        try:
+            client = BVCSClient(repo_path)
+            client.checkout(commit_hash, str(temp_path))
+
+            with open(temp_path, "rb") as f:
+                file_bytes = f.read()
+
+            waveform_data = extract_waveform(file_bytes, num_samples=num_samples)
+
+        except BVCSError as e:
+            return Response({"error": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+        except ValueError as e:
+            return Response({"error": str(e)}, status=status.HTTP_400_BAD_REQUEST)
+        except OSError as e:
+            return Response({"error": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+        finally:
+            if temp_path.exists():
+                temp_path.unlink()
+
+        return Response(waveform_data)

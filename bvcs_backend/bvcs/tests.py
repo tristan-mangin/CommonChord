@@ -7,6 +7,7 @@ import unittest.mock
 from django.test import TestCase
 from rest_framework.test import APITestCase
 from rest_framework import status
+from io import BytesIO
 
 from .client import BVCSClient, BVCSError
 from .models import Repository, Commit
@@ -393,4 +394,79 @@ class TestRepositoryNameValidation(APITestCase):
 
     def test_name_too_long_rejected(self):
         response = self.client.post('/api/repos/', {'name': 'a' * 256}, format='json')
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+
+class TestWaveformView(APITestCase):
+    def setUp(self):
+        self.repo = Repository.objects.create(name='wav-repo', path='/some/path')
+        self.valid_hash = 'a' * 64
+
+    def _make_wav_bytes(self):
+        import wave
+        import struct
+        buffer = BytesIO()
+        with wave.open(buffer, 'wb') as wf:
+            wf.setnchannels(1)
+            wf.setsampwidth(2)
+            wf.setframerate(44100)
+            frames = struct.pack('<' + 'h' * 44100, *([1000] * 44100))
+            wf.writeframes(frames)
+        return buffer.getvalue()
+
+    @patch('bvcs.views.BVCSClient')
+    def test_waveform_success(self, MockClient):
+        mock_instance = MockClient.return_value
+        mock_instance.checkout.return_value = None
+        wav_bytes = self._make_wav_bytes()
+
+        with patch('builtins.open', unittest.mock.mock_open(read_data=wav_bytes)), \
+             patch('bvcs.views.Path.exists', return_value=True), \
+             patch('bvcs.views.Path.unlink'):
+            response = self.client.get(
+                f'/api/repos/{self.repo.id}/commits/{self.valid_hash}/waveform/'
+            )
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertIn('sample_rate', response.data)
+        self.assertIn('duration', response.data)
+        self.assertIn('min_samples', response.data)
+        self.assertIn('max_samples', response.data)
+
+    @patch('bvcs.views.BVCSClient')
+    def test_waveform_invalid_file(self, MockClient):
+        mock_instance = MockClient.return_value
+        mock_instance.checkout.return_value = None
+
+        with patch('builtins.open', unittest.mock.mock_open(read_data=b'not a wav file')), \
+             patch('bvcs.views.Path.exists', return_value=True), \
+             patch('bvcs.views.Path.unlink'):
+            response = self.client.get(
+                f'/api/repos/{self.repo.id}/commits/{self.valid_hash}/waveform/'
+            )
+
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertIn('error', response.data)
+
+    def test_waveform_invalid_hash(self):
+        response = self.client.get(
+            f'/api/repos/{self.repo.id}/commits/badhash/waveform/'
+        )
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+
+    def test_waveform_nonexistent_repo(self):
+        response = self.client.get(
+            f'/api/repos/99999/commits/{self.valid_hash}/waveform/'
+        )
+        self.assertEqual(response.status_code, status.HTTP_404_NOT_FOUND)
+
+    def test_waveform_invalid_samples_param(self):
+        response = self.client.get(
+            f'/api/repos/{self.repo.id}/commits/{self.valid_hash}/waveform/?samples=99'
+        )
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+
+    def test_waveform_samples_too_large(self):
+        response = self.client.get(
+            f'/api/repos/{self.repo.id}/commits/{self.valid_hash}/waveform/?samples=10001'
+        )
         self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
