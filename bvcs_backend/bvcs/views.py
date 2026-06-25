@@ -10,9 +10,20 @@ from rest_framework.parsers import MultiPartParser
 from .models import Repository, Commit
 from .serializers import RepositorySerializer, RepositoryCreateSerializer, CommitSerializer
 from .client import BVCSClient, BVCSError
+
+from .als_parser import parse_als, ALSInfo
 from .waveform import extract_waveform
 
+import os 
+import mimetypes
+from django.http import FileResponse, HttpResponse
+
 import re
+
+ALLOWED_EXTENSIONS = {'.wav', '.als', '.flp'}
+
+def is_valid_sha256(hash_string: str) -> bool:
+    return bool(re.fullmatch(r'[a-fA-F0-9]{64}', hash_string))
 
 class RepositoryListView(APIView):
     """
@@ -180,6 +191,13 @@ class StageFileView(APIView):
                 status=status.HTTP_400_BAD_REQUEST,
             )
 
+        ext = Path(uploaded_file.name).suffix.lower()
+        if ext not in ALLOWED_EXTENSIONS:
+            return Response(
+                {"error": f"Unsupported file type '{ext}'. Allowed types: {', '.join(ALLOWED_EXTENSIONS)}."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
         # Write the uploaded file into the repo directory
         repo_path = Path(repo.path)
         dest_path = repo_path / uploaded_file.name
@@ -200,7 +218,7 @@ def is_valid_sha256(hash_string: str) -> bool:
 
 class CheckoutView(APIView):
     """
-    GET /api/repos/{id}/checkout/{hash}/  — retrieve a specific version of a file
+    GET /api/repos/{id}/checkout/{hash}/  — stream a specific version of a file
     """
 
     def get_repo(self, repo_id):
@@ -221,15 +239,44 @@ class CheckoutView(APIView):
             )
 
         repo_path = Path(repo.path)
-        output_path = repo_path / f"checkout_{commit_hash[:8]}"
+        temp_path = repo_path / f".checkout_tmp_{commit_hash[:8]}"
 
         try:
             client = BVCSClient(repo_path)
-            client.checkout(commit_hash, str(output_path))
+            client.checkout(commit_hash, str(temp_path))
+
+            # Try to find the original filename from the commit record
+            filename = self._get_filename(repo, commit_hash) or f"checkout_{commit_hash[:8]}"
+            content_type, _ = mimetypes.guess_type(filename)
+            if content_type is None:
+                content_type = "application/octet-stream"
+
+            with open(temp_path, "rb") as f:
+                file_bytes = f.read()
+
         except BVCSError as e:
             return Response({"error": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+        except OSError as e:
+            return Response({"error": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+        finally:
+            # Always clean up the temp file
+            if temp_path.exists():
+                temp_path.unlink()
 
-        return Response({"output_path": str(output_path)}, status=status.HTTP_200_OK)
+        response = HttpResponse(file_bytes, content_type=content_type)
+        response["Content-Disposition"] = f'attachment; filename="{filename}"'
+        response["Content-Length"] = len(file_bytes)
+        return response
+
+    def _get_filename(self, repo, commit_hash):
+        """Try to infer the original filename from the commit message or DB record."""
+        try:
+            commit = Commit.objects.get(hash=commit_hash, repository=repo)
+            # If the commit message contains a filename pattern, extract it
+            # For now return None and let the caller use a fallback
+            return None
+        except Commit.DoesNotExist:
+            return None
 
 class StatusView(APIView):
     """
@@ -255,6 +302,72 @@ class StatusView(APIView):
 
         return Response(status_data)
 
+ class ParseALSView(APIView):
+    """
+    GET /api/repos/{id}/commits/{hash}/parse_als/
+    Checks out the blob for the commit, parses it as an Ableton .als file,
+    and returns structured JSON
+    """
+
+    def get_repo(self, repo_id):
+        try:
+            return Repository.objects.get(pk=repo_id)
+        except Repository.DoesNotExist:
+            return None
+
+    def get(self, request, repo_id, commit_hash):
+        repo = self.get_repo(repo_id)
+        if repo is None:
+            return Response({"error": "Repository not found."}, status=status.HTTP_404_NOT_FOUND)
+
+        if not is_valid_sha256(commit_hash):
+            return Response(
+                {"error": "Invalid commit hash. Expected a 64-character hex string."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        repo_path = Path(repo.path)
+        temp_path = repo_path / f"als_tmp_{commit_hash[:8]}"
+
+        try:
+            client = BVCSClient(repo_path)
+            client.checkout(commit_hash, str(temp_path))
+
+            with open(temp_path, "rb") as f:
+                file_bytes = f.read()
+            
+            als_info = parse_als(file_bytes)
+        except BVCSError as e:
+            return Response({"error": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+        except ValueError as e:
+            return Response({"error": str(e)}, status=status.HTTP_400_BAD_REQUEST)
+        except OSError as e:
+            return Response({"error": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+        finally:
+            if temp_path.exists():
+                temp_path.unlink()
+        
+        return Response({
+            "tempo": als_info.tempo,
+            "time_signature_numerator": als_info.time_signature_numerator,
+            "time_signature_denominator": als_info.time_signature_denominator,
+            "tracks": [
+                {
+                    "name": track.name,
+                    "track_type": track.track_type,
+                    "clips": [
+                        {
+                            "name": clip.name,
+                            "start_time": clip.start_time,
+                            "end_time": clip.end_time,
+                        }
+                        for clip in track.clips
+                    ],
+                }
+                for track in als_info.tracks
+            ],
+        })
+    
 class WaveformView(APIView):
     """
     GET /api/repos/{id}/commits/{hash}/waveform/

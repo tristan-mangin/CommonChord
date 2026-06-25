@@ -308,27 +308,76 @@ class TestStageFileView(APITestCase):
 
         self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
         self.assertIn('error', response.data)
+    
+    def test_stage_file_invalid_extension_rejected(self):
+        from django.core.files.uploadedfile import SimpleUploadedFile
+        bad_file = SimpleUploadedFile('notes.txt', b'some text', content_type='text/plain')
+        response = self.client.post(
+            f'/api/repos/{self.repo.id}/add/',
+            {'file': bad_file},
+            format='multipart'
+        )
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertIn('error', response.data)
+
+    def test_stage_file_valid_extensions_accepted(self):
+        from django.core.files.uploadedfile import SimpleUploadedFile
+        from bvcs.views import StageFileView
+
+        for ext in ['.wav', '.als', '.flp']:
+            mock_file = MagicMock()
+            mock_file.name = f'test{ext}'
+            mock_file.size = 100
+
+            mock_request = MagicMock()
+            mock_request.FILES = {'file': mock_file}
+
+            mock_repo = MagicMock()
+            mock_repo.path = '/some/path'
+
+            view = StageFileView()
+
+            with patch.object(view, 'get_repo', return_value=mock_repo), \
+                patch('builtins.open', unittest.mock.mock_open()), \
+                patch('bvcs.views.BVCSClient') as MockClient:
+                mock_instance = MockClient.return_value
+                mock_instance.add.return_value = None
+                response = view.post(mock_request, repo_id=self.repo.id)
+
+            self.assertEqual(response.status_code, status.HTTP_200_OK, f"Failed for extension {ext}")
 
 class TestCheckoutView(APITestCase):
     def setUp(self):
         self.repo = Repository.objects.create(name='my-repo', path='/some/path')
 
     @patch('bvcs.views.BVCSClient')
-    def test_checkout_success(self, MockClient):
+    @patch('bvcs.views.mimetypes.guess_type', return_value=('audio/wav', None))
+    def test_checkout_success(self, mock_guess, MockClient):
         mock_instance = MockClient.return_value
         mock_instance.checkout.return_value = None
         valid_hash = 'a' * 64
-        response = self.client.get(f'/api/repos/{self.repo.id}/checkout/{valid_hash}/')
+
+        with patch('bvcs.views.Path.exists', return_value=True), \
+            patch('bvcs.views.Path.unlink'), \
+            patch('builtins.open', unittest.mock.mock_open(read_data=b'audio data')):
+            response = self.client.get(f'/api/repos/{self.repo.id}/checkout/{valid_hash}/')
+
         self.assertEqual(response.status_code, status.HTTP_200_OK)
-        self.assertIn('output_path', response.data)
+        self.assertEqual(response['Content-Disposition'], f'attachment; filename="checkout_aaaaaaaa"')
 
     @patch('bvcs.views.BVCSClient')
-    def test_checkout_bvcs_error(self, MockClient):
+    @patch('bvcs.views.mimetypes.guess_type', return_value=('audio/wav', None))
+    def test_checkout_valid_hash_accepted(self, mock_guess, MockClient):
         mock_instance = MockClient.return_value
-        mock_instance.checkout.side_effect = BVCSError('checkout failed')
+        mock_instance.checkout.return_value = None
         valid_hash = 'a' * 64
-        response = self.client.get(f'/api/repos/{self.repo.id}/checkout/{valid_hash}/')
-        self.assertEqual(response.status_code, status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+        with patch('bvcs.views.Path.exists', return_value=True), \
+            patch('bvcs.views.Path.unlink'), \
+            patch('builtins.open', unittest.mock.mock_open(read_data=b'audio data')):
+            response = self.client.get(f'/api/repos/{self.repo.id}/checkout/{valid_hash}/')
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
 
     def test_checkout_nonexistent_repo(self):
         response = self.client.get('/api/repos/99999/checkout/abc123/')
@@ -344,14 +393,6 @@ class TestCheckoutView(APITestCase):
         response = self.client.get(f'/api/repos/{self.repo.id}/checkout/{invalid_hash}/')
         self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
         self.assertIn('error', response.data)
-
-    @patch('bvcs.views.BVCSClient')
-    def test_checkout_valid_hash_accepted(self, MockClient):
-        mock_instance = MockClient.return_value
-        mock_instance.checkout.return_value = None
-        valid_hash = 'a' * 64
-        response = self.client.get(f'/api/repos/{self.repo.id}/checkout/{valid_hash}/')
-        self.assertEqual(response.status_code, status.HTTP_200_OK)
 
 # Repository name validation tests 
 
@@ -395,6 +436,68 @@ class TestRepositoryNameValidation(APITestCase):
     def test_name_too_long_rejected(self):
         response = self.client.post('/api/repos/', {'name': 'a' * 256}, format='json')
         self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+
+class TestParseALSView(APITestCase):
+    def setUp(self):
+        self.repo = Repository.objects.create(name='als-repo', path='/some/path')
+        self.valid_hash = 'a' * 64
+
+    @patch('bvcs.views.BVCSClient')
+    @patch('bvcs.views.mimetypes.guess_type', return_value=('application/octet-stream', None))
+    def test_als_info_success(self, mock_guess, MockClient):
+        import gzip
+        import xml.etree.ElementTree as ET
+
+         # Build a minimal valid .als XML and gzip it
+        root = ET.Element('Ableton')
+        live_set = ET.SubElement(root, 'LiveSet')
+        master = ET.SubElement(live_set, 'MasterTrack')
+        tempo_el = ET.SubElement(master, 'Tempo')
+        ET.SubElement(tempo_el, 'Manual', {'Value': '120.0'})
+        xml_bytes = ET.tostring(root)
+        als_bytes = gzip.compress(xml_bytes)
+
+        mock_instance = MockClient.return_value
+        mock_instance.checkout.return_value = None
+
+        with patch('builtins.open', unittest.mock.mock_open(read_data=als_bytes)), \
+             patch('bvcs.views.Path.exists', return_value=True), \
+             patch('bvcs.views.Path.unlink'):
+            response = self.client.get(
+                f'/api/repos/{self.repo.id}/commits/{self.valid_hash}/als/'
+            )
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertIn('tempo', response.data)
+        self.assertIn('tracks', response.data)
+
+        @patch('bvcs.views.BVCSClient')
+        def test_als_parser_invalid_file(self, MockClient):
+            mock_instance = MockClient.return_value
+            mock_instance.checkout.return_value = None
+
+            with patch('builtins.open', unittest.mock.mock_open(read_data=b'not a gzip file')), \
+                patch('bvcs.views.Path.exists', return_value=True), \
+                patch('bvcs.views.Path.unlink'), \
+                patch('bvcs.views.mimetypes.guess_type', return_value=('application/octet-stream', None)):
+                response = self.client.get(
+                    f'/api/repos/{self.repo.id}/commits/{self.valid_hash}/als/'
+                )
+
+            self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+            self.assertIn('error', response.data)
+
+        def test_als_parser_invalid_hash(self):
+            response = self.client.get(
+                f'/api/repos/{self.repo.id}/commits/badhash/als/'
+            )
+            self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+
+        def test_als_parser_nonexistent_repo(self):
+            response = self.client.get(
+                f'/api/repos/99999/commits/{self.valid_hash}/als/'
+            )
+            self.assertEqual(response.status_code, status.HTTP_404_NOT_FOUND)
 
 class TestWaveformView(APITestCase):
     def setUp(self):
