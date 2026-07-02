@@ -2,7 +2,7 @@
     
 Personal project testing the concept of an open-source version control platform for music production. The basic framework is similar to git, with commits, branches, etc. eventually to be implemented to support large music files.
 
-# Stack (current plan)
+# Stack 
 
 | Tool         | Use                                              |
 |--------------|--------------------------------------------------|
@@ -14,12 +14,17 @@ Personal project testing the concept of an open-source version control platform 
 
 # Latest Updates
 
-### End-to-end Workflow working - 5/5/2026
+### Ableton File Parsing and Waveform Decomposition - 6/25/2026
+- GET /api/repos/{id}/commits/{hash}/parse_als/ - parse ableton .als files into JSON
+- GET /api/repos/{id}/commits/{hash}/waveform/ - downsampled amplitude data
+
+### End-to-end Workflow - 5/5/2026
 - POST /api/repos/ — created a repo on disk and in the DB
-- POST /api/repos/2/add/ — staged a file
-- POST /api/repos/2/commits/ — created a commit
-- GET /api/repos/2/commits/ — retrieved and synced commit history
-- GET /api/repos/2/checkout/{hash}/ — retrieved the correct file contents
+- POST /api/repos/{id}/add/ — staged a file
+- POST /api/repos/{id}/commits/ — created a commit
+- GET /api/repos/{id}/commits/ — retrieved and synced commit history
+- GET /api/repos/{id}/checkout/{hash}/ — retrieved the correct file contents
+- GET /api/repos/{id}/status/  — current staging status
 
 ### Binary File (Git Like) Storage Handling - 4/21/2026
 - Find, create, and add hashed binary objects to repositories
