@@ -37,6 +37,8 @@ Python Notes
     using pytest                    --> pip install pytest-django
                                     --> pip freeze > requirements.txt
 
+    intall requirements             --> pip install -r requirements.txt
+
 WHEN BUILDING
     source venv/bin/activate
     cd bvcs_backend
