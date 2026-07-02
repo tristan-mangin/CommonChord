@@ -302,7 +302,7 @@ class StatusView(APIView):
 
         return Response(status_data)
 
- class ParseALSView(APIView):
+class ParseALSView(APIView):
     """
     GET /api/repos/{id}/commits/{hash}/parse_als/
     Checks out the blob for the commit, parses it as an Ableton .als file,
