@@ -1,7 +1,9 @@
 from django.db import models
+from django.contrib.auth.models import User
 
 class Repository(models.Model):
-    name = models.CharField(max_length=255, unique=True)
+    user = models.ForeignKey(User, on_delete=models.CASCADE, related_name='repositories')
+    name = models.CharField(max_length=255)
     path = models.CharField(max_length=1024)
     created_at = models.DateTimeField(auto_now_add=True)
 
@@ -10,6 +12,7 @@ class Repository(models.Model):
 
     class Meta:
         verbose_name_plural = "repositories"
+        unique_together = [['user', 'name']]
 
 
 class Commit(models.Model):

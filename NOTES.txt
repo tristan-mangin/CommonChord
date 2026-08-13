@@ -36,6 +36,7 @@ Python Notes
 
     using pytest                    --> pip install pytest-django
                                     --> pip freeze > requirements.txt
+                                    --> pytest bvcs/tests.py -v
 
     intall requirements             --> pip install -r requirements.txt
 
