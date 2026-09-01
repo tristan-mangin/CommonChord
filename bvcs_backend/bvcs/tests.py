@@ -588,3 +588,99 @@ class TestWaveformView(AuthenticatedTestCase):
             f'/api/repos/{self.repo.id}/commits/{self.valid_hash}/waveform/?samples=10001'
         )
         self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+
+class TestAuthViews(APITestCase):
+    def test_register_success(self):
+        response = self.client.post('/api/auth/register/', {
+            'username': 'newuser',
+            'password': 'securepass123',
+            'confirm_password': 'securepass123'
+        }, format='json')
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED)
+        self.assertIn('token', response.data)
+        self.assertIn('id', response.data)
+        self.assertEqual(response.data['username'], 'newuser')
+
+    def test_register_missing_username(self):
+        response = self.client.post('/api/auth/register/', {
+            'password': 'securepass123',
+            'confirm_password': 'securepass123',
+        }, format='json')
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+
+    def test_register_missing_password(self):
+        response = self.client.post('/api/auth/register/', {
+            'username': 'newuser',
+            'confirm_password': 'securepass123'
+        }, format='json')
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+
+    def test_register_passwords_do_not_match(self):
+        response = self.client.post('/api/auth/register/', {
+            'username': 'newuser',
+            'password': 'securepass123',
+            'confirm_password': 'wrongpass123'
+        }, format='json')
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+
+    def test_register_password_too_short(self):
+        response = self.client.post('/api/auth/register/', {
+            'username': 'newuser',
+            'password': 'short',
+            'confirm_password': 'short'
+        }, format='json')
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+
+    def test_register_duplicate_username(self):
+        User.objects.create_user(username='existing', password='securepass123')
+        response = self.client.post('/api/auth/register/', {
+            'username': 'existing',
+            'password': 'securepass123',
+            'confirm_password': 'securepass123'
+        }, format='json')
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+
+    def test_login_success(self):
+        User.objects.create_user(username='loginuser', password='securepass123')
+        response = self.client.post('/api/auth/login/', {
+            'username': 'loginuser',
+            'password': 'securepass123'
+        }, format='json')
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertIn('token', response.data)
+        self.assertEqual(response.data['username'], 'loginuser')
+
+    def test_login_wrong_password(self):
+        User.objects.create_user(username='loginuser', password='securepass123')
+        response = self.client.post('/api/auth/login/', {
+            'username': 'loginuser',
+            'password': 'wrongpass'
+        }, format='json')
+        self.assertEqual(response.status_code, status.HTTP_401_UNAUTHORIZED)
+
+    def test_login_nonexistent_user(self):
+        response = self.client.post('/api/auth/login/', {
+            'username': 'nobody',
+            'password': 'securepass123',
+        }, format='json')
+        self.assertEqual(response.status_code, status.HTTP_401_UNAUTHORIZED)
+
+    def test_login_missing_credentials(self):
+        response = self.client.post('/api/auth/login/', {}, format='json')
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+
+    def test_logout_success(self):
+        user = User.objects.create_user(username='logoutuser', password='securepass123')
+        token, _ = Token.objects.get_or_create(user=user)
+        self.client.credentials(HTTP_AUTHORIZATION=f'Token {token.key}')
+        response = self.client.post('/api/auth/logout/')
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+
+    def test_logout_unauthenticated(self):
+        response = self.client.post('/api/auth/logout/')
+        self.assertEqual(response.status_code, status.HTTP_401_UNAUTHORIZED)
+
+    def test_unauthenticated_request_rejected(self):
+        self.client.credentials() # clear any credentials
+        response = self.client.get('/api/repos/')
+        self.assertEqual(response.status_code, status.HTTP_401_UNAUTHORIZED)
