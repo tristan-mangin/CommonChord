@@ -14,6 +14,11 @@ Personal project testing the concept of an open-source version control platform 
 
 # Latest Updates
 
+### User Token Based Authentication - 9/1/2026
+- POST /api/auth/register/ - Create new user account
+- POST /api/auth/login/ - Login and receive a token
+- POST /api/auth/logout/ - Invalidate the current token
+
 ### Ableton File Parsing and Waveform Decomposition - 6/25/2026
 - GET /api/repos/{id}/commits/{hash}/parse_als/ - parse ableton .als files into JSON
 - GET /api/repos/{id}/commits/{hash}/waveform/ - downsampled amplitude data
