@@ -32,7 +32,7 @@ class RepositoryListView(APIView):
     """
 
     def get(self, request):
-        repos = Repository.objects.all()
+        repos = Repository.objects.filter(user=request.user)
         serializer = RepositorySerializer(repos, many=True)
         return Response(serializer.data)
 
@@ -59,6 +59,7 @@ class RepositoryListView(APIView):
             return Response({"error": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
         repo = Repository.objects.create(
+            user=request.user,
             name=name,
             path=str(repo_path),
         )
@@ -70,14 +71,14 @@ class RepositoryDetailView(APIView):
     GET /api/repos/{id}/  — retrieve a single repository with its commits
     """
 
-    def get_repo(self, repo_id):
+    def get_repo(self, repo_id, user):
         try:
-            return Repository.objects.get(pk=repo_id)
+            return Repository.objects.get(pk=repo_id, user=user)
         except Repository.DoesNotExist:
             return None
 
     def get(self, request, repo_id):
-        repo = self.get_repo(repo_id)
+        repo = self.get_repo(repo_id, request.user)
         if repo is None:
             return Response({"error": "Repository not found."}, status=status.HTTP_404_NOT_FOUND)
         serializer = RepositorySerializer(repo)
@@ -90,14 +91,14 @@ class CommitListView(APIView):
     POST /api/repos/{id}/commits/  — create a new commit
     """
 
-    def get_repo(self, repo_id):
+    def get_repo(self, repo_id, user):
         try:
-            return Repository.objects.get(pk=repo_id)
+            return Repository.objects.get(pk=repo_id, user=user)
         except Repository.DoesNotExist:
             return None
 
     def get(self, request, repo_id):
-        repo = self.get_repo(repo_id)
+        repo = self.get_repo(repo_id, request.user)
         if repo is None:
             return Response({"error": "Repository not found."}, status=status.HTTP_404_NOT_FOUND)
 
@@ -126,7 +127,7 @@ class CommitListView(APIView):
         return Response(serializer.data)
 
     def post(self, request, repo_id):
-        repo = self.get_repo(repo_id)
+        repo = self.get_repo(repo_id, request.user)
         if repo is None:
             return Response({"error": "Repository not found."}, status=status.HTTP_404_NOT_FOUND)
 
@@ -169,14 +170,14 @@ class StageFileView(APIView):
     """
     parser_classes = [MultiPartParser]
 
-    def get_repo(self, repo_id):
+    def get_repo(self, repo_id, user):
         try:
-            return Repository.objects.get(pk=repo_id)
+            return Repository.objects.get(pk=repo_id, user=user)
         except Repository.DoesNotExist:
             return None
 
     def post(self, request, repo_id):
-        repo = self.get_repo(repo_id)
+        repo = self.get_repo(repo_id, request.user)
         if repo is None:
             return Response({"error": "Repository not found."}, status=status.HTTP_404_NOT_FOUND)
 
@@ -221,14 +222,14 @@ class CheckoutView(APIView):
     GET /api/repos/{id}/checkout/{hash}/  — stream a specific version of a file
     """
 
-    def get_repo(self, repo_id):
+    def get_repo(self, repo_id, user):
         try:
-            return Repository.objects.get(pk=repo_id)
+            return Repository.objects.get(pk=repo_id, user=user)
         except Repository.DoesNotExist:
             return None
 
     def get(self, request, repo_id, commit_hash):
-        repo = self.get_repo(repo_id)
+        repo = self.get_repo(repo_id, request.user)
         if repo is None:
             return Response({"error": "Repository not found."}, status=status.HTTP_404_NOT_FOUND)
 
@@ -283,14 +284,14 @@ class StatusView(APIView):
     GET /api/repos/{id}/status/  — current staging status
     """
 
-    def get_repo(self, repo_id):
+    def get_repo(self, repo_id, user):
         try:
-            return Repository.objects.get(pk=repo_id)
+            return Repository.objects.get(pk=repo_id, user=user)
         except Repository.DoesNotExist:
             return None
 
     def get(self, request, repo_id):
-        repo = self.get_repo(repo_id)
+        repo = self.get_repo(repo_id, request.user)
         if repo is None:
             return Response({"error": "Repository not found."}, status=status.HTTP_404_NOT_FOUND)
 
@@ -309,14 +310,14 @@ class ParseALSView(APIView):
     and returns structured JSON
     """
 
-    def get_repo(self, repo_id):
+    def get_repo(self, repo_id, user):
         try:
-            return Repository.objects.get(pk=repo_id)
+            return Repository.objects.get(pk=repo_id, user=user)
         except Repository.DoesNotExist:
             return None
 
     def get(self, request, repo_id, commit_hash):
-        repo = self.get_repo(repo_id)
+        repo = self.get_repo(repo_id, request.user)
         if repo is None:
             return Response({"error": "Repository not found."}, status=status.HTTP_404_NOT_FOUND)
 
@@ -375,14 +376,14 @@ class WaveformView(APIView):
     amplitude data for frontend waveform rendering.
     """
 
-    def get_repo(self, repo_id):
+    def get_repo(self, repo_id, user):
         try:
-            return Repository.objects.get(pk=repo_id)
+            return Repository.objects.get(pk=repo_id, user=user)
         except Repository.DoesNotExist:
             return None
 
     def get(self, request, repo_id, commit_hash):
-        repo = self.get_repo(repo_id)
+        repo = self.get_repo(repo_id, request.user)
         if repo is None:
             return Response({"error": "Repository not found."}, status=status.HTTP_404_NOT_FOUND)
 

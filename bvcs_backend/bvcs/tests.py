@@ -8,12 +8,21 @@ from django.test import TestCase
 from rest_framework.test import APITestCase
 from rest_framework import status
 from io import BytesIO
+from django.contrib.auth.models import User
+from rest_framework.authtoken.models import Token
 
 from .client import BVCSClient, BVCSError
 from .models import Repository, Commit
 
 BINARY = '/mnt/c/Code/Music-Version-Control/build/bvcs'
 REPO_PATH = Path('/mnt/c/Code/Music-Version-Control/repos/test_repo')
+
+class AuthenticatedTestCase(APITestCase):
+    """Base class that creates a test user and authenticates the client"""
+    def setUp(self):
+        self.user = User.objects.create_user(username='testuser', password='testpass123')
+        token, _ = Token.objects.get_or_create(user=self.user)
+        self.client.credentials(HTTP_AUTHORIZATION=f'Token {token.key}')
 
 # BVCSClient tests
 
@@ -99,7 +108,7 @@ class TestBVCSClientStaticMethods(TestCase):
 
 # View tests
 
-class TestRepositoryListView(APITestCase):
+class TestRepositoryListView(AuthenticatedTestCase):
     @patch('bvcs.views.BVCSClient')
     def test_create_repository_success(self, MockClient):
         mock_instance = MockClient.return_value
@@ -134,8 +143,8 @@ class TestRepositoryListView(APITestCase):
         self.assertEqual(response.data, [])
 
     def test_list_repositories_returns_all(self):
-        Repository.objects.create(name='repo-a', path='/some/path/a')
-        Repository.objects.create(name='repo-b', path='/some/path/b')
+        Repository.objects.create(name='repo-a', path='/some/path/a', user=self.user)
+        Repository.objects.create(name='repo-b', path='/some/path/b', user=self.user)
         response = self.client.get('/api/repos/')
         self.assertEqual(response.status_code, status.HTTP_200_OK)
         self.assertEqual(len(response.data), 2)
@@ -156,10 +165,11 @@ class TestRepositoryListView(APITestCase):
         fake_path.rmdir.assert_called_once()
         self.assertFalse(Repository.objects.filter(name='bad-repo').exists())
 
-
-class TestRepositoryDetailView(APITestCase):
+class TestRepositoryDetailView(AuthenticatedTestCase):
     def setUp(self):
-        self.repo = Repository.objects.create(name='my-repo', path='/some/path')
+        # self.repo = Repository.objects.create(name='my-repo', path='/some/path')
+        super().setUp()
+        self.repo = Repository.objects.create(name='my-repo', path = '/some/path', user=self.user)
 
     def test_get_existing_repository(self):
         response = self.client.get(f'/api/repos/{self.repo.id}/')
@@ -171,9 +181,10 @@ class TestRepositoryDetailView(APITestCase):
         self.assertEqual(response.status_code, status.HTTP_404_NOT_FOUND)
 
 
-class TestCommitListView(APITestCase):
+class TestCommitListView(AuthenticatedTestCase):
     def setUp(self):
-        self.repo = Repository.objects.create(name='my-repo', path='/some/path')
+        super().setUp()
+        self.repo = Repository.objects.create(name='my-repo', path='/some/path', user=self.user)
         self.sample_commits = [
             {
                 "hash": "abc123",
@@ -256,9 +267,10 @@ class TestCommitListView(APITestCase):
         self.assertIn('error', response.data)
 
 
-class TestStageFileView(APITestCase):
+class TestStageFileView(AuthenticatedTestCase):
     def setUp(self):
-        self.repo = Repository.objects.create(name='my-repo', path='/some/path')
+        super().setUp()
+        self.repo = Repository.objects.create(name='my-repo', path='/some/path', user=self.user)
 
     @patch('bvcs.views.BVCSClient')
     def test_stage_file_success(self, MockClient):
@@ -346,9 +358,10 @@ class TestStageFileView(APITestCase):
 
             self.assertEqual(response.status_code, status.HTTP_200_OK, f"Failed for extension {ext}")
 
-class TestCheckoutView(APITestCase):
+class TestCheckoutView(AuthenticatedTestCase):
     def setUp(self):
-        self.repo = Repository.objects.create(name='my-repo', path='/some/path')
+        super().setUp()
+        self.repo = Repository.objects.create(name='my-repo', path='/some/path', user=self.user)
 
     @patch('bvcs.views.BVCSClient')
     @patch('bvcs.views.mimetypes.guess_type', return_value=('audio/wav', None))
@@ -396,7 +409,7 @@ class TestCheckoutView(APITestCase):
 
 # Repository name validation tests 
 
-class TestRepositoryNameValidation(APITestCase):
+class TestRepositoryNameValidation(AuthenticatedTestCase):
     @patch('bvcs.views.BVCSClient')
     def test_valid_name_accepted(self, MockClient):
         mock_instance = MockClient.return_value
@@ -437,9 +450,10 @@ class TestRepositoryNameValidation(APITestCase):
         response = self.client.post('/api/repos/', {'name': 'a' * 256}, format='json')
         self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
 
-class TestParseALSView(APITestCase):
+class TestParseALSView(AuthenticatedTestCase):
     def setUp(self):
-        self.repo = Repository.objects.create(name='als-repo', path='/some/path')
+        super().setUp()
+        self.repo = Repository.objects.create(name='als-repo', path='/some/path', user=self.user)
         self.valid_hash = 'a' * 64
 
     @patch('bvcs.views.BVCSClient')
@@ -499,9 +513,10 @@ class TestParseALSView(APITestCase):
             )
             self.assertEqual(response.status_code, status.HTTP_404_NOT_FOUND)
 
-class TestWaveformView(APITestCase):
+class TestWaveformView(AuthenticatedTestCase):
     def setUp(self):
-        self.repo = Repository.objects.create(name='wav-repo', path='/some/path')
+        super().setUp()
+        self.repo = Repository.objects.create(name='wav-repo', path='/some/path', user=self.user)
         self.valid_hash = 'a' * 64
 
     def _make_wav_bytes(self):
@@ -573,3 +588,99 @@ class TestWaveformView(APITestCase):
             f'/api/repos/{self.repo.id}/commits/{self.valid_hash}/waveform/?samples=10001'
         )
         self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+
+class TestAuthViews(APITestCase):
+    def test_register_success(self):
+        response = self.client.post('/api/auth/register/', {
+            'username': 'newuser',
+            'password': 'securepass123',
+            'confirm_password': 'securepass123'
+        }, format='json')
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED)
+        self.assertIn('token', response.data)
+        self.assertIn('id', response.data)
+        self.assertEqual(response.data['username'], 'newuser')
+
+    def test_register_missing_username(self):
+        response = self.client.post('/api/auth/register/', {
+            'password': 'securepass123',
+            'confirm_password': 'securepass123',
+        }, format='json')
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+
+    def test_register_missing_password(self):
+        response = self.client.post('/api/auth/register/', {
+            'username': 'newuser',
+            'confirm_password': 'securepass123'
+        }, format='json')
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+
+    def test_register_passwords_do_not_match(self):
+        response = self.client.post('/api/auth/register/', {
+            'username': 'newuser',
+            'password': 'securepass123',
+            'confirm_password': 'wrongpass123'
+        }, format='json')
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+
+    def test_register_password_too_short(self):
+        response = self.client.post('/api/auth/register/', {
+            'username': 'newuser',
+            'password': 'short',
+            'confirm_password': 'short'
+        }, format='json')
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+
+    def test_register_duplicate_username(self):
+        User.objects.create_user(username='existing', password='securepass123')
+        response = self.client.post('/api/auth/register/', {
+            'username': 'existing',
+            'password': 'securepass123',
+            'confirm_password': 'securepass123'
+        }, format='json')
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+
+    def test_login_success(self):
+        User.objects.create_user(username='loginuser', password='securepass123')
+        response = self.client.post('/api/auth/login/', {
+            'username': 'loginuser',
+            'password': 'securepass123'
+        }, format='json')
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertIn('token', response.data)
+        self.assertEqual(response.data['username'], 'loginuser')
+
+    def test_login_wrong_password(self):
+        User.objects.create_user(username='loginuser', password='securepass123')
+        response = self.client.post('/api/auth/login/', {
+            'username': 'loginuser',
+            'password': 'wrongpass'
+        }, format='json')
+        self.assertEqual(response.status_code, status.HTTP_401_UNAUTHORIZED)
+
+    def test_login_nonexistent_user(self):
+        response = self.client.post('/api/auth/login/', {
+            'username': 'nobody',
+            'password': 'securepass123',
+        }, format='json')
+        self.assertEqual(response.status_code, status.HTTP_401_UNAUTHORIZED)
+
+    def test_login_missing_credentials(self):
+        response = self.client.post('/api/auth/login/', {}, format='json')
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+
+    def test_logout_success(self):
+        user = User.objects.create_user(username='logoutuser', password='securepass123')
+        token, _ = Token.objects.get_or_create(user=user)
+        self.client.credentials(HTTP_AUTHORIZATION=f'Token {token.key}')
+        response = self.client.post('/api/auth/logout/')
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+
+    def test_logout_unauthenticated(self):
+        response = self.client.post('/api/auth/logout/')
+        self.assertEqual(response.status_code, status.HTTP_401_UNAUTHORIZED)
+
+    def test_unauthenticated_request_rejected(self):
+        self.client.credentials() # clear any credentials
+        response = self.client.get('/api/repos/')
+        self.assertEqual(response.status_code, status.HTTP_401_UNAUTHORIZED)
