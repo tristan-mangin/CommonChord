@@ -38,6 +38,7 @@ INSTALLED_APPS = [
     'django.contrib.messages',
     'django.contrib.staticfiles',
 
+    'corsheaders', 
     'rest_framework',
     'rest_framework.authtoken',
     'bvcs',
@@ -53,6 +54,7 @@ REST_FRAMEWORK = {
 }
 
 MIDDLEWARE = [
+    'corsheaders.middleware.CorsMiddleware',
     'django.middleware.security.SecurityMiddleware',
     'django.contrib.sessions.middleware.SessionMiddleware',
     'django.middleware.common.CommonMiddleware',
@@ -140,3 +142,29 @@ BVCS_REPOS_ROOT  = '/mnt/c/Code/Music-Version-Control/repos'
 # Max upload size: 500MB (to support large WAV files)
 DATA_UPLOAD_MAX_MEMORY_SIZE = 524288000
 FILE_UPLOAD_MAX_MEMORY_SIZE = 524288000
+
+# CORS Settings
+# During development, allow requests from the React dev server
+CORS_ALLOWED_ORIGINS = [
+    "http://localhost:5173", # Vite default port
+    "http://127.0.0.1:5173"
+]
+
+# Allow the Autorization header so tokens can be sent
+CORS_ALLOW_HEADERS = [
+    "accept", 
+    "authorization", 
+    "content-type", 
+    "origin", 
+    "x-requested-with",
+]
+
+# Allow these HTTP methods
+CORS_ALLOW_METHODS = [
+    "DELETE", 
+    "GET", 
+    "OPTIONS", 
+    "PATCH",
+    "POST",
+    "PUT",
+]
